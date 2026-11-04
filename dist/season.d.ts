@@ -1,12 +1,12 @@
 /**
- * A season, rated: the priors given, an Elo replay of the games in order,
- * then the trophies. This is the whole arithmetic between "here are the
+ * A season, rated: the league anchors given, every team's latest games
+ * solved together (rule.ts fit), then the trophies. This is the whole arithmetic between "here are the
  * games" and "here are the ratings" — the site does the reading (which
  * league each team is in, which flight is a tournament's top one, who won
  * which final) and hands this the answers, so a change to the rule can be
  * judged on a fixture file with no database in sight.
  */
-import { type Game, type Level } from "./rule.js";
+import { type Game, type Level, type Rated } from "./rule.js";
 import { type FlightLevel } from "./tier.js";
 import type { RankedHonour } from "./types.js";
 export type SeasonTeam = {
@@ -20,7 +20,7 @@ export type SeasonTeam = {
     level: Level;
     /** The league entry the level came from — "RCL 2026-27 · Boys U13 Division 1" — for the record. */
     league: string | null;
-    /** What last season left it, if it was ranked then. */
+    /** Read before 2.0, when part of last season's rating carried over; ignored now — last season's games are in `games`. */
     last?: {
         rating: number;
         games: number;
@@ -45,21 +45,22 @@ export type SeasonHonour = {
     level: FlightLevel | null;
 };
 export type SeasonInput = {
-    /** The season's first day, ISO — 1 May, the way the site reads a season. */
+    /** The season's first day, ISO — 1 May, the way the site reads a season. Leagues and trophies are this season's. */
     from: string;
+    /** The day the ratings are for, ISO; the latest kickoff when not given. Games may reach a year back from it, across seasons. */
+    at?: string;
     teams: SeasonTeam[];
     games: SeasonGame[];
     honours: SeasonHonour[];
 };
-export type Rated = {
-    rating: number;
-    games: number;
-};
+export type { Rated };
 export type SeasonOutput = {
-    /** Where each team started: its league prior plus what it carried. */
+    /** Each team's anchor: its league prior. */
     prior: Map<string, number>;
-    /** Every team's rating after the games and the trophies, and how many it played. */
+    /** Every team's rating after the games and the trophies, and how many games it counted. */
     rated: Map<string, Rated>;
+    /** The games each team's rating counted, as indexes into `input.games`: its latest 20 within the year. */
+    counted: Map<string, number[]>;
     /** The trophies, priced. */
     honours: Map<string, RankedHonour[]>;
 };

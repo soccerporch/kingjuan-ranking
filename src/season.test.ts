@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { CARRY, SELECT, TIER } from "./rule.js";
+import { SELECT, TIER } from "./rule.js";
 import { rankCohorts, rateSeason, type SeasonInput } from "./season.js";
 
 const team = (id: string, over: Partial<SeasonInput["teams"][number]> = {}): SeasonInput["teams"][number] => ({
@@ -11,10 +11,16 @@ const game = (home: string, away: string, hs: number, as: number, over: Partial<
 });
 
 describe("rateSeason", () => {
-  it("starts each team at its league prior plus what it carried", () => {
+  it("anchors each team at its league prior, and no longer reads last season's carry", () => {
     const out = rateSeason({ from: "2026-05-01", teams: [team("a", { level: { label: "ECNL", prior: TIER.one }, last: { rating: TIER.one + 100, games: 8 } }), team("b")], games: [], honours: [] });
-    expect(out.prior.get("a")).toBe(TIER.one + CARRY * 100);
+    expect(out.prior.get("a")).toBe(TIER.one);
     expect(out.prior.get("b")).toBe(SELECT.prior);
+  });
+
+  it("names the games each rating counted", () => {
+    const out = rateSeason({ from: "2026-05-01", teams: [team("a"), team("b")], games: [game("a", "b", 1, 0), game("b", "a", 2, 2)], honours: [] });
+    expect(out.counted.get("a")).toEqual([0, 1]);
+    expect(out.rated.get("a")!.games).toBe(2);
   });
 
   it("pays one trophy per team per event, the first handed over", () => {
@@ -29,10 +35,10 @@ describe("rateSeason", () => {
       ],
     });
     expect(out.honours.get("a")).toHaveLength(1);
-    expect(out.honours.get("a")![0].bonus).toBe(240);
-    expect(out.honours.get("b")![0].bonus).toBe(120);
+    expect(out.honours.get("a")![0].bonus).toBe(60);
+    expect(out.honours.get("b")![0].bonus).toBe(30);
     const played = rateSeason({ from: "2026-05-01", teams: [team("a"), team("b")], games: [game("a", "b", 2, 0, { kind: "tournament", level: { tier: 1, step: 0 }, event: "Surf Cup" })], honours: [] });
-    expect(out.rated.get("a")!.rating - played.rated.get("a")!.rating).toBe(240);
+    expect(out.rated.get("a")!.rating - played.rated.get("a")!.rating).toBe(60);
   });
 });
 

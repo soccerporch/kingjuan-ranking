@@ -93,18 +93,18 @@ describe("weightOf", () => {
 
 describe("honourBonus", () => {
   it("pays a champion by the flight's tier, a fifth less per flight down to a fifth, a runner-up half, an untiered cup as rec", () => {
-    expect(honourBonus("champion", L(1))).toBe(240);
-    expect(honourBonus("runner-up", L(1))).toBe(120);
-    expect(honourBonus("champion", L(2))).toBe(150);
-    expect(honourBonus("champion", L(3))).toBe(80);
-    expect(honourBonus("champion", L(4))).toBe(40);
-    expect(honourBonus("champion", L(5))).toBe(20);
-    // Surf Cup's flights: Best of the Best 240, Super Black 192, Super White 144, Black 96, White 48, Blue 48.
-    expect([0, 1, 2, 3, 4, 5].map((step) => honourBonus("champion", L(1, step)))).toEqual([240, 192, 144, 96, 48, 48]);
-    expect(honourBonus("runner-up", L(1, 1))).toBe(96);
-    expect(honourBonus("champion", null)).toBe(20);
-    expect(honourBonus("champion", null, "Boys U13 Gold")).toBe(20);
-    expect(honourBonus("champion", null, "Boys U13 Bronze")).toBe(10);
-    expect(honourBonus("runner-up", null)).toBe(10);
+    expect(honourBonus("champion", L(1))).toBe(60);
+    expect(honourBonus("runner-up", L(1))).toBe(30);
+    expect(honourBonus("champion", L(2))).toBe(38);
+    expect(honourBonus("champion", L(3))).toBe(20);
+    expect(honourBonus("champion", L(4))).toBe(10);
+    expect(honourBonus("champion", L(5))).toBe(5);
+    // Surf Cup's flights: Best of the Best 60, Super Black 48, Super White 36, Black 24, White 12, Blue 12.
+    expect([0, 1, 2, 3, 4, 5].map((step) => honourBonus("champion", L(1, step)))).toEqual([60, 48, 36, 24, 12, 12]);
+    expect(honourBonus("runner-up", L(1, 1))).toBe(24);
+    expect(honourBonus("champion", null)).toBe(5);
+    expect(honourBonus("champion", null, "Boys U13 Gold")).toBe(5);
+    expect(honourBonus("champion", null, "Boys U13 Bronze")).toBe(3);
+    expect(honourBonus("runner-up", null)).toBe(3);
   });
 });

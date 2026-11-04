@@ -16,7 +16,7 @@ export type ReasonInput = {
     losses: RankedResult[];
     /** Whether the schedule was thin: few games, or all at select level. */
     tieredOpponents: number;
-    /** What last season added to the prior, when it had one. */
+    /** What last season added to the prior — rows rated before 2.0 only; a rating now reads last season's games directly. */
     carried?: number | null;
 };
 export declare function reasonFor(i: ReasonInput): string;

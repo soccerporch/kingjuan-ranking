@@ -1,13 +1,13 @@
 /**
- * A season, rated: the priors given, an Elo replay of the games in order,
- * then the trophies. This is the whole arithmetic between "here are the
+ * A season, rated: the league anchors given, every team's latest games
+ * solved together (rule.ts fit), then the trophies. This is the whole arithmetic between "here are the
  * games" and "here are the ratings" — the site does the reading (which
  * league each team is in, which flight is a tournament's top one, who won
  * which final) and hands this the answers, so a change to the rule can be
  * judged on a fixture file with no database in sight.
  */
 
-import { carriedPrior, MIN_GAMES, replay, SELECT, type Game, type Level } from "./rule.js";
+import { fit, MIN_GAMES, SELECT, type Game, type Level, type Rated } from "./rule.js";
 import { honourBonus, type FlightLevel } from "./tier.js";
 import type { RankedHonour } from "./types.js";
 
@@ -22,7 +22,7 @@ export type SeasonTeam = {
   level: Level;
   /** The league entry the level came from — "RCL 2026-27 · Boys U13 Division 1" — for the record. */
   league: string | null;
-  /** What last season left it, if it was ranked then. */
+  /** Read before 2.0, when part of last season's rating carried over; ignored now — last season's games are in `games`. */
   last?: { rating: number; games: number } | null;
   /** Whether the site lists it — a Washington club's own team. Everyone plays in the replay; only these are ranked. */
   listed: boolean;
@@ -47,29 +47,37 @@ export type SeasonHonour = {
 };
 
 export type SeasonInput = {
-  /** The season's first day, ISO — 1 May, the way the site reads a season. */
+  /** The season's first day, ISO — 1 May, the way the site reads a season. Leagues and trophies are this season's. */
   from: string;
+  /** The day the ratings are for, ISO; the latest kickoff when not given. Games may reach a year back from it, across seasons. */
+  at?: string;
   teams: SeasonTeam[];
   games: SeasonGame[];
   honours: SeasonHonour[];
 };
 
-export type Rated = { rating: number; games: number };
+export type { Rated };
 
 export type SeasonOutput = {
-  /** Where each team started: its league prior plus what it carried. */
+  /** Each team's anchor: its league prior. */
   prior: Map<string, number>;
-  /** Every team's rating after the games and the trophies, and how many it played. */
+  /** Every team's rating after the games and the trophies, and how many games it counted. */
   rated: Map<string, Rated>;
+  /** The games each team's rating counted, as indexes into `input.games`: its latest 20 within the year. */
+  counted: Map<string, number[]>;
   /** The trophies, priced. */
   honours: Map<string, RankedHonour[]>;
 };
 
 export function rateSeason(input: SeasonInput): SeasonOutput {
   const team = new Map(input.teams.map((t) => [t.id, t]));
-  const prior = new Map(input.teams.map((t) => [t.id, carriedPrior(t.level.prior, t.last ?? undefined)]));
+  const prior = new Map(input.teams.map((t) => [t.id, t.level.prior]));
   const yearOf = (id: string) => team.get(id)?.year ?? null;
-  const rated = replay(input.games, (id) => prior.get(id) ?? SELECT.prior, yearOf);
+  const games = input.games.map((g) => ({ ...g, t: Date.parse(g.kickoffAt) }));
+  const at = input.at ? Date.parse(input.at) : Math.max(0, ...games.map((g) => g.t));
+  const fitted = fit(games, (id) => prior.get(id) ?? SELECT.prior, at, yearOf);
+  const rated = new Map<string, Rated>([...fitted].map(([id, r]) => [id, { rating: r.rating, games: r.games }]));
+  const counted = new Map([...fitted].map(([id, r]) => [id, r.counted]));
 
   // One trophy per team per event: the site hands over one, and the first stands.
   const honours = new Map<string, RankedHonour[]>();
@@ -83,7 +91,7 @@ export function rateSeason(input: SeasonInput): SeasonOutput {
     if (r) rated.set(h.teamId, { ...r, rating: r.rating + bonus });
     (honours.get(h.teamId) ?? honours.set(h.teamId, []).get(h.teamId)!).push({ event: h.event, division: h.division, place: h.place, tier: h.level?.tier ?? null, bonus });
   }
-  return { prior, rated, honours };
+  return { prior, rated, counted, honours };
 }
 
 /**

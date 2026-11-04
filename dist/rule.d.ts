@@ -1,73 +1,65 @@
 /**
  * The ranking rule, in one place and pure.
  *
- * 1. Prior — where the team plays. The best league DIVISION it is entered in
- *    this season sets its starting rating; only a league's top flight carries
- *    the league's level, and for EA and GA the rung depends on the age (see
- *    levelOf). A team in no league starts as "select". Then last season:
- *    half of where the team finished above or below that prior carries over
- *    (CARRY), so a rating fades across seasons rather than resetting.
- * 2. Results — an Elo replay in kickoff order. Margin counts as √margin,
- *    capped at three, and only as far as the result surprised: a blowout
- *    of a side you were expected to beat is worth a 1–0. A league game
- *    counts by its league (leagueWeightOf, ECNL ×1.1 down to Copa ×0.7);
- *    a tournament by the tier of its flight (tier.ts) — a Surf Cup
- *    Best of the Best game a third more than a league game, a rec flight
- *    less; an untiered tournament at 0.6, anything else at 0.6. Then the
- *    trophies: a flight's champion earns a bonus by the flight's tier —
- *    240 for a national top flight, 120 regional, 60 select, 30 rec, and
- *    20 for an untiered cup — once per
- *    event, and the runner-up half. A Surf Cup San Diego title is worth
- *    most of a season on its own.
- * 3. Opponent — the opponent's rating at the time, so beating a higher-level
- *    side pays more. Playing up counts on top, twice: a side a year older is
- *    expected to win by another hundred and fifty points' worth, so beating
- *    it pays more and losing to it costs less; and every game against an
- *    older side earns a credit whatever the result, because it is the
- *    strongest teams that choose to play up. Two years older, twice both.
- * 4. Confidence — one decided game to be ranked at all (owner, 2026-09-27:
- *    it was three, which left a state whose season had just opened with
- *    eight teams in a cohort of fifteen); fewer than five is provisional.
+ * Since 2.0 (owner, 2026-11-03) a rating is the goal difference that best
+ * explains a team's results, solved over everyone's games at once, the
+ * way USA Sport Statistics describes theirs — with our league ladder kept
+ * as an anchor. Tested walk-forward on the 2026-27 season, it called
+ * 79.4% of decided games right where the Elo replay before it called
+ * 77.7%, and was better calibrated.
  *
- * This ranks a cohort and starts everyone where their league puts them;
- * the site's fixture forecast is a different model (it starts everyone
- * equal) and is not part of this package.
+ * 1. Prior — where the team plays. The best league DIVISION it is entered
+ *    in this season sets its anchor (levelOf); a team in no league is
+ *    "select". The anchor counts as one game the team drew against a
+ *    side exactly at its league's level, so a team with few games sits
+ *    near its league and one with twenty sits where its results put it.
+ * 2. Results — a team's last 20 decided games within a year, across
+ *    seasons. Each is a goal difference, capped at five, and the rating
+ *    gap between the two sides should explain it: a hundred points is a
+ *    goal. Recent games weigh more (half every 120 days), so do close
+ *    matchups, and a game counts by what it was played in — a league by
+ *    the league (leagueWeightOf), a tournament by its flight (tier.ts).
+ * 3. Opponent — solved together, so beating a side that beats others is
+ *    worth more; no age is assumed in the result. Playing up earns a
+ *    credit on top: nine points a game against a side a year older,
+ *    eighteen two years, thirty at most.
+ * 4. Trophies — a flight's champion earns a bonus by its tier (tier.ts),
+ *    the runner-up half, once per event this season.
+ * 5. Confidence — one decided game to be ranked at all; fewer than five is
+ *    provisional.
+ *
+ * This ranks a cohort; the site's fixture forecast is a different model
+ * and is not part of this package.
  */
 import { type FlightLevel } from "./tier.js";
-/** The home side's expected score, 0–1: the Elo expectation. */
+/** The home side's expected score, 0–1, from two ratings: the Elo curve, for a reader that wants a probability. */
 export declare function expected(home: number, away: number): number;
-export declare const RULE_VERSION = "2026-11-03";
+export declare const RULE_VERSION = "2026-11-04";
 /** Where the rule lives, for a page that explains it to say so: anyone can read it, run it on the season's games, and propose a change. */
 export declare const RULE_SOURCE = "https://github.com/soccerporch/kingjuan-ranking";
-export declare const K = 45;
-export declare const MARGIN_CAP = 3;
 export declare const MIN_GAMES = 1;
-/** What a year of age is worth in the expectation, per year the older side has. */
-export declare const AGE_GAP = 150;
-/** What playing a side a year older earns, win or lose, per game. */
-export declare const PLAY_UP_CREDIT = 35;
-/** A gap wider than this is a mislabelled team, not a brave one; and the credit stops adding up after a few games. */
+/** A goal, in rating points: the scale the league ladder is written in. */
+export declare const POINTS_PER_GOAL = 100;
+/** A margin past this is no more telling than this. */
+export declare const GOAL_CAP = 5;
+/** The games a rating reads: each team's latest this many, within the window. */
+export declare const LAST_GAMES = 20;
+export declare const WINDOW_DAYS = 365;
+/** A game's weight halves every this many days. */
+export declare const HALF_LIFE_DAYS = 120;
+/** Matchups this many goals apart weigh half as much as an even one. */
+export declare const CLOSE_GOALS = 3;
+/** What the league anchor is worth, in games. */
+export declare const PRIOR_GAMES = 1;
+/** What playing a side a year older earns, per game, whatever the result; and the most it adds up to. */
+export declare const PLAY_UP_CREDIT = 9;
+export declare const MAX_CREDIT = 30;
+/** A gap wider than this is a mislabelled team, not a brave one. */
 export declare const MAX_GAP = 2;
-export declare const MAX_CREDIT = 120;
 export type Level = {
     label: string;
     prior: number;
 };
-/**
- * How much of last season a team keeps. Its rating is not thrown away on
- * 1 May: the new season starts from the league prior plus half of what
- * last season put the team above or below that prior — a Surf Cup title
- * worth +240 in July is +120 the next May and +60 the year after. Half,
- * because rosters turn over: what a side proved is evidence, not a title
- * deed (owner, 2026-09-17: continue a team's history, and let the others
- * catch up). A team that was not ranked last season — no decided game,
- * or new — starts from its league prior alone.
- */
-export declare const CARRY = 0.5;
-export declare function carriedPrior(leaguePrior: number, last: {
-    rating: number;
-    games: number;
-} | undefined): number;
 export declare const SELECT: Level;
 /**
  * The ladder, as the owner ranks it (2026-09-15):
@@ -139,16 +131,22 @@ export type Game = {
 };
 /** How much older the home side is than the away side, in years; 0 when either has no birth year. */
 export declare function ageGapOf(homeYear: number | null, awayYear: number | null): number;
-/**
- * Every team's rating after these games, from the priors given, and how
- * many each played. `yearOf` is the team's oldest birth year, for the
- * play-up adjustment; null for a team with none.
- */
-export declare function replay(games: Game[], prior: (teamId: string) => number, yearOf?: (teamId: string) => number | null): Map<string, {
+export type Rated = {
     rating: number;
     games: number;
+};
+/**
+ * Every team's rating from these games, solved together. `games` must
+ * carry `t`, the kickoff in ms; `at` is the day the rating is for. A game
+ * is read when it is among either side's latest LAST_GAMES within the
+ * window; a team's `games` counts its own. Returns, for each team that
+ * played, its rating and the indexes of the games it counted.
+ */
+export declare function fit(games: (Game & {
+    t: number;
+})[], prior: (teamId: string) => number, at: number, yearOf?: (teamId: string) => number | null): Map<string, Rated & {
+    counted: number[];
 }>;
-/** "boys-2013" — gender and the oldest birth year; null for a team that fits no cohort. */
 export declare function cohortOf(team: {
     gender: string | null;
     birthYears: number[] | null;
@@ -173,5 +171,5 @@ export declare const RULE_STEPS: {
  * The rule in a breath — what the site and the app show, with a link to
  * this repository for the rest. RULE_STEPS is the long form.
  */
-export declare const RULE_SUMMARY = "Every team starts where its league puts it \u2014 ECNL at the top, then MLS Next, ECNL RL, EA and GA, RCL and WPL division by division \u2014 plus half of what it earned last season. Every decided game since May then moves both sides by how surprising the result was: tournament games count by the strength of the flight, a trophy adds a bonus by its tier, and playing up pays extra. One decided game to be ranked; Washington clubs\u2019 teams are listed, whether the club lists them or a schedule did.";
+export declare const RULE_SUMMARY = "A rating is the goal difference that best explains a team's last 20 games within a year, solved against everyone's results at once \u2014 a hundred points is a goal. Recent games, close matchups and stronger competitions count more. Where a team plays anchors it \u2014 ECNL at the top, then MLS Next, ECNL RL, EA and GA, RCL and WPL division by division \u2014 and trophies and playing up add a little. One decided game to be ranked; Washington clubs\u2019 teams are listed, whether the club lists them or a schedule did.";
 export declare const RULE_NOTE = "A cohort is a gender and the oldest birth year on the team, so a \u201CB13/14\u201D side ranks with the 2013s \u2014 U13 this season, the way the leagues label it. Washington clubs\u2019 teams are listed \u2014 the club\u2019s own and the ones a schedule printed under its name (owner, 2026-09-18) \u2014 but not a side with no club, and not an out-of-state club\u2019s; games against all of them still count.";

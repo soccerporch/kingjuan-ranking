@@ -14,17 +14,24 @@ change it.
 
 ## The rule in one paragraph
 
-Every team starts where its league puts it (`levelOf`: ECNL and Pre-ECNL at the
-top, then MLS Next, ECNL RL, EA and GA, RCL and WPL by division), plus half of
-where it finished last season above or below that (`carriedPrior`). Then every
-decided game of the season, in kickoff order, moves both sides by how
-surprising the result was — an Elo replay (`replay`) where margin counts as
-√goals capped at three and only as far as the result surprised, league games
-count by their league, tournament games by the tier and flight they were
-played in (`weightOf`), and playing a side a year older pays on top. A flight's
+A rating is the goal difference that best explains a team's results, solved
+over everyone's games at once (`fit`): each team's latest 20 decided games
+within a year, across seasons, margins capped at five goals, a hundred points
+a goal. Recent games weigh more (half every 120 days), so do close matchups,
+and a game counts by what it was played in — league games by their league,
+tournament games by the tier and flight (`weightOf`). Where a team plays
+anchors it (`levelOf`: ECNL and Pre-ECNL at the top, then MLS Next, ECNL RL,
+EA and GA, RCL and WPL by division), worth one game. No age is assumed in a
+result; playing a side a year older earns a small credit on top. A flight's
 champion and runner-up earn a bonus by the flight's tier (`honourBonus`): a
-national cup's top flight 240 points, a rec cup's 20. One decided game to
-be ranked at all, fewer than five provisional. `RULE_STEPS` says the same thing at length, as the site does.
+national cup's top flight 60 points, a rec cup's 5. One decided game to be
+ranked at all, fewer than five provisional. `RULE_STEPS` says the same thing
+at length, as the site does.
+
+Before 2.0 (2026-11-04) the rule was an Elo replay of the season with half of
+last season carried over. The goal-difference fit replaced it after a
+walk-forward test on the 2026-27 season: 79.4% of decided games called right
+against 77.7%, and better calibrated.
 
 Two things are read from the games rather than declared: which flight of a
 tournament is its top one (`orderFlights` — by the league level of the teams
@@ -66,7 +73,7 @@ The site pins a tagged version and stamps every ranking run with
 
 | file | what |
 |---|---|
-| `src/rule.ts` | the league ladder and priors, the Elo replay, cohorts, the rule's own description |
+| `src/rule.ts` | the league ladder and priors, the goal-difference fit, cohorts, the rule's own description |
 | `src/tier.ts` | tournament tiers 1–5, flight order and steps, game weights, trophy bonuses |
 | `src/season.ts` | `rateSeason` / `rankCohorts`: a season file in, ratings and tables out |
 | `src/reason.ts` | the sentence and the points that explain a team's place |

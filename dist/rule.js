@@ -1,72 +1,63 @@
 /**
  * The ranking rule, in one place and pure.
  *
- * 1. Prior — where the team plays. The best league DIVISION it is entered in
- *    this season sets its starting rating; only a league's top flight carries
- *    the league's level, and for EA and GA the rung depends on the age (see
- *    levelOf). A team in no league starts as "select". Then last season:
- *    half of where the team finished above or below that prior carries over
- *    (CARRY), so a rating fades across seasons rather than resetting.
- * 2. Results — an Elo replay in kickoff order. Margin counts as √margin,
- *    capped at three, and only as far as the result surprised: a blowout
- *    of a side you were expected to beat is worth a 1–0. A league game
- *    counts by its league (leagueWeightOf, ECNL ×1.1 down to Copa ×0.7);
- *    a tournament by the tier of its flight (tier.ts) — a Surf Cup
- *    Best of the Best game a third more than a league game, a rec flight
- *    less; an untiered tournament at 0.6, anything else at 0.6. Then the
- *    trophies: a flight's champion earns a bonus by the flight's tier —
- *    240 for a national top flight, 120 regional, 60 select, 30 rec, and
- *    20 for an untiered cup — once per
- *    event, and the runner-up half. A Surf Cup San Diego title is worth
- *    most of a season on its own.
- * 3. Opponent — the opponent's rating at the time, so beating a higher-level
- *    side pays more. Playing up counts on top, twice: a side a year older is
- *    expected to win by another hundred and fifty points' worth, so beating
- *    it pays more and losing to it costs less; and every game against an
- *    older side earns a credit whatever the result, because it is the
- *    strongest teams that choose to play up. Two years older, twice both.
- * 4. Confidence — one decided game to be ranked at all (owner, 2026-09-27:
- *    it was three, which left a state whose season had just opened with
- *    eight teams in a cohort of fifteen); fewer than five is provisional.
+ * Since 2.0 (owner, 2026-11-03) a rating is the goal difference that best
+ * explains a team's results, solved over everyone's games at once, the
+ * way USA Sport Statistics describes theirs — with our league ladder kept
+ * as an anchor. Tested walk-forward on the 2026-27 season, it called
+ * 79.4% of decided games right where the Elo replay before it called
+ * 77.7%, and was better calibrated.
  *
- * This ranks a cohort and starts everyone where their league puts them;
- * the site's fixture forecast is a different model (it starts everyone
- * equal) and is not part of this package.
+ * 1. Prior — where the team plays. The best league DIVISION it is entered
+ *    in this season sets its anchor (levelOf); a team in no league is
+ *    "select". The anchor counts as one game the team drew against a
+ *    side exactly at its league's level, so a team with few games sits
+ *    near its league and one with twenty sits where its results put it.
+ * 2. Results — a team's last 20 decided games within a year, across
+ *    seasons. Each is a goal difference, capped at five, and the rating
+ *    gap between the two sides should explain it: a hundred points is a
+ *    goal. Recent games weigh more (half every 120 days), so do close
+ *    matchups, and a game counts by what it was played in — a league by
+ *    the league (leagueWeightOf), a tournament by its flight (tier.ts).
+ * 3. Opponent — solved together, so beating a side that beats others is
+ *    worth more; no age is assumed in the result. Playing up earns a
+ *    credit on top: nine points a game against a side a year older,
+ *    eighteen two years, thirty at most.
+ * 4. Trophies — a flight's champion earns a bonus by its tier (tier.ts),
+ *    the runner-up half, once per event this season.
+ * 5. Confidence — one decided game to be ranked at all; fewer than five is
+ *    provisional.
+ *
+ * This ranks a cohort; the site's fixture forecast is a different model
+ * and is not part of this package.
  */
 import { weightOf } from "./tier.js";
-/** The home side's expected score, 0–1: the Elo expectation. */
+/** The home side's expected score, 0–1, from two ratings: the Elo curve, for a reader that wants a probability. */
 export function expected(home, away) {
     return 1 / (1 + 10 ** ((away - home) / 400));
 }
-export const RULE_VERSION = "2026-11-03";
+export const RULE_VERSION = "2026-11-04";
 /** Where the rule lives, for a page that explains it to say so: anyone can read it, run it on the season's games, and propose a change. */
 export const RULE_SOURCE = "https://github.com/soccerporch/kingjuan-ranking";
-export const K = 45;
-export const MARGIN_CAP = 3;
 export const MIN_GAMES = 1;
-/** What a year of age is worth in the expectation, per year the older side has. */
-export const AGE_GAP = 150;
-/** What playing a side a year older earns, win or lose, per game. */
-export const PLAY_UP_CREDIT = 35;
-/** A gap wider than this is a mislabelled team, not a brave one; and the credit stops adding up after a few games. */
+/** A goal, in rating points: the scale the league ladder is written in. */
+export const POINTS_PER_GOAL = 100;
+/** A margin past this is no more telling than this. */
+export const GOAL_CAP = 5;
+/** The games a rating reads: each team's latest this many, within the window. */
+export const LAST_GAMES = 20;
+export const WINDOW_DAYS = 365;
+/** A game's weight halves every this many days. */
+export const HALF_LIFE_DAYS = 120;
+/** Matchups this many goals apart weigh half as much as an even one. */
+export const CLOSE_GOALS = 3;
+/** What the league anchor is worth, in games. */
+export const PRIOR_GAMES = 1;
+/** What playing a side a year older earns, per game, whatever the result; and the most it adds up to. */
+export const PLAY_UP_CREDIT = 9;
+export const MAX_CREDIT = 30;
+/** A gap wider than this is a mislabelled team, not a brave one. */
 export const MAX_GAP = 2;
-export const MAX_CREDIT = 120;
-/**
- * How much of last season a team keeps. Its rating is not thrown away on
- * 1 May: the new season starts from the league prior plus half of what
- * last season put the team above or below that prior — a Surf Cup title
- * worth +240 in July is +120 the next May and +60 the year after. Half,
- * because rosters turn over: what a side proved is evidence, not a title
- * deed (owner, 2026-09-17: continue a team's history, and let the others
- * catch up). A team that was not ranked last season — no decided game,
- * or new — starts from its league prior alone.
- */
-export const CARRY = 0.5;
-export function carriedPrior(leaguePrior, last) {
-    if (!last || last.games < MIN_GAMES)
-        return leaguePrior;
-    return leaguePrior + CARRY * (last.rating - leaguePrior);
-}
 export const SELECT = { label: "select", prior: 1400 };
 /**
  * The ladder, as the owner ranks it (2026-09-15):
@@ -176,44 +167,67 @@ export function ageGapOf(homeYear, awayYear) {
     return awayYear - homeYear;
 }
 /**
- * Every team's rating after these games, from the priors given, and how
- * many each played. `yearOf` is the team's oldest birth year, for the
- * play-up adjustment; null for a team with none.
+ * Every team's rating from these games, solved together. `games` must
+ * carry `t`, the kickoff in ms; `at` is the day the rating is for. A game
+ * is read when it is among either side's latest LAST_GAMES within the
+ * window; a team's `games` counts its own. Returns, for each team that
+ * played, its rating and the indexes of the games it counted.
  */
-export function replay(games, prior, yearOf = () => null) {
+export function fit(games, prior, at, yearOf = () => null) {
+    const DAY = 86_400_000;
+    const inWindow = [];
+    games.forEach((g, i) => { if (g.t <= at && g.t > at - WINDOW_DAYS * DAY)
+        inWindow.push(i); });
+    inWindow.sort((a, b) => games[a].t - games[b].t);
+    const own = new Map();
+    for (const i of inWindow)
+        for (const id of [games[i].homeTeamId, games[i].awayTeamId])
+            (own.get(id) ?? own.set(id, []).get(id)).push(i);
+    for (const [id, list] of own)
+        own.set(id, list.slice(-LAST_GAMES));
+    const read = new Set([...own.values()].flat());
+    const edges = new Map();
+    for (const i of read) {
+        const g = games[i];
+        const gd = Math.max(-GOAL_CAP, Math.min(GOAL_CAP, g.homeScore - g.awayScore)) * POINTS_PER_GOAL;
+        const w = 0.5 ** ((at - g.t) / (HALF_LIFE_DAYS * DAY)) * (g.kind === "league" ? (g.leagueWeight ?? 1) : weightOf(g.kind, g.level ?? null));
+        (edges.get(g.homeTeamId) ?? edges.set(g.homeTeamId, []).get(g.homeTeamId)).push({ o: g.awayTeamId, gd, w });
+        (edges.get(g.awayTeamId) ?? edges.set(g.awayTeamId, []).get(g.awayTeamId)).push({ o: g.homeTeamId, gd: -gd, w });
+    }
+    // Each team's rating is the weighted average of what its games say it is
+    // (the opponent's rating plus the margin) and its anchor; repeated until
+    // everyone's settles.
+    const r = new Map();
+    for (const id of edges.keys())
+        r.set(id, prior(id));
+    const close = CLOSE_GOALS * POINTS_PER_GOAL;
+    for (let pass = 0; pass < 60; pass++) {
+        for (const [id, list] of edges) {
+            const me = r.get(id);
+            let num = PRIOR_GAMES * prior(id), den = PRIOR_GAMES;
+            for (const { o, gd, w } of list) {
+                const ro = r.get(o);
+                const ww = w / (1 + ((me - ro) / close) ** 2);
+                num += ww * (gd + ro);
+                den += ww;
+            }
+            r.set(id, num / den);
+        }
+    }
+    // The credit for playing up: the younger side, per counted game, whatever the result.
     const out = new Map();
-    const credited = new Map();
-    const get = (id) => out.get(id) ?? { rating: prior(id), games: 0 };
-    const credit = (id, amount) => {
-        const so = credited.get(id) ?? 0;
-        const give = Math.min(amount, Math.max(0, MAX_CREDIT - so));
-        credited.set(id, so + give);
-        return give;
-    };
-    for (const g of games) {
-        const h = get(g.homeTeamId);
-        const a = get(g.awayTeamId);
-        const w = g.kind === "league" ? (g.leagueWeight ?? 1) : weightOf(g.kind, g.level ?? null);
-        // The older side is expected to win by more; the result is judged against that.
-        const gap = Math.max(-MAX_GAP, Math.min(MAX_GAP, ageGapOf(yearOf(g.homeTeamId), yearOf(g.awayTeamId))));
-        const e = expected(h.rating + Math.max(0, gap) * AGE_GAP, a.rating + Math.max(0, -gap) * AGE_GAP);
-        const s = g.homeScore > g.awayScore ? 1 : g.homeScore === g.awayScore ? 0.5 : 0;
-        // Margin pays by how surprising the result was: running up the score on a
-        // side you were expected to beat is worth a 1–0; a 3–0 as the underdog
-        // is worth the full √3. A draw keeps half the margin's say.
-        const goals = Math.min(MARGIN_CAP, Math.max(1, Math.abs(g.homeScore - g.awayScore))) ** 0.5;
-        const surprise = s === 1 ? 1 - e : s === 0 ? e : 0.5;
-        const margin = 1 + (goals - 1) * surprise;
-        const delta = K * w * margin * (s - e);
-        // The credit for playing up goes to the younger side only; the older side's rating is not docked for it.
-        const homeCredit = credit(g.homeTeamId, Math.max(0, -gap) * PLAY_UP_CREDIT * w);
-        const awayCredit = credit(g.awayTeamId, Math.max(0, gap) * PLAY_UP_CREDIT * w);
-        out.set(g.homeTeamId, { rating: h.rating + delta + homeCredit, games: h.games + 1 });
-        out.set(g.awayTeamId, { rating: a.rating - delta + awayCredit, games: a.games + 1 });
+    for (const [id, counted] of own) {
+        let credit = 0;
+        for (const i of counted) {
+            const g = games[i];
+            const opp = g.homeTeamId === id ? g.awayTeamId : g.homeTeamId;
+            const gap = Math.min(MAX_GAP, Math.max(0, ageGapOf(yearOf(opp), yearOf(id))));
+            credit += gap * PLAY_UP_CREDIT * (g.kind === "league" ? (g.leagueWeight ?? 1) : weightOf(g.kind, g.level ?? null));
+        }
+        out.set(id, { rating: (r.get(id) ?? prior(id)) + Math.min(MAX_CREDIT, credit), games: counted.length, counted });
     }
     return out;
 }
-/** "boys-2013" — gender and the oldest birth year; null for a team that fits no cohort. */
 export function cohortOf(team) {
     const years = (team.birthYears ?? []).filter((y) => y > 2000 && y < 2030);
     if (!years.length)
@@ -244,19 +258,19 @@ export function ageGroupOf(cohort, seasonStart) {
 export const RULE_STEPS = [
     {
         title: "Where the team plays.",
-        detail: "The best league division it is entered in this season sets its starting point — only a league's top division carries the league's level: ECNL and Pre-ECNL; then MLS Next, and Elite Academy and Girls Academy at U11–U12; then ECNL RL, and EA and GA from U13 up; then RCL Division 1, GA Aspire and WPL Premier (and, for U8–U10, WPL Dev Div. 1); then on down division by division — RCL 2 with WPL Classic and Dev 2, RCL 3 with Dev 3. ECNL and Pre-ECNL start a further 120 points above the next rung, because their sides play the strongest schedules. At U10 and younger, where no academy league exists, RCL Division 1 is the top of the pyramid and starts on the ladder's top rung, and WPL Dev Div. 1 starts where Pre-MLS and EA do. A team in no league starts as select.",
-    },
-    {
-        title: "Last season.",
-        detail: "A rating is not thrown away on 1 May. The new season starts from that league prior plus half of where the team finished last season above or below it — a Surf Cup title worth 240 points in July is 120 the next May and 60 the year after. Half, because rosters change: what a side proved is evidence, not a title deed. A team with no ranked last season starts from its league prior alone.",
+        detail: "The best league division it is entered in this season sets its anchor — only a league's top division carries the league's level: ECNL and Pre-ECNL; then MLS Next, and Elite Academy and Girls Academy at U11–U12; then ECNL RL, and EA and GA from U13 up; then RCL Division 1, GA Aspire and WPL Premier (and, for U8–U10, WPL Dev Div. 1); then on down division by division — RCL 2 with WPL Classic and Dev 2, RCL 3 with Dev 3. ECNL and Pre-ECNL sit a further 120 points above the next rung, because their sides play the strongest schedules. At U10 and younger, where no academy league exists, RCL Division 1 is the top of the pyramid and sits on the ladder's top rung, and WPL Dev Div. 1 where Pre-MLS and EA do. A team in no league is select. The anchor counts as one game: a team with few results sits near its league, one with twenty where its results put it.",
     },
     {
         title: "Results.",
-        detail: "Every decided game this season — from May, when clubs move up to the new age groups, so the summer cups count — in order, moves both sides' ratings by how surprising the result was and by the margin — capped at three goals, and counted only as far as the result surprised, so running up the score on a side you were expected to beat is worth a 1–0. League games count by the league: ECNL and Pre-ECNL a tenth more than a game at the ECNL RL / EA / GA level, RCL 1 and WPL Premier a tenth less, RCL 2 and Classic a fifth less, RCL 3, Copa and the Dev divisions three tenths less. Tournaments count by the strength of the flight: the top flights of Surf Cup San Diego, Premier SuperCopa and Club América Cup a third more than a league game; the top flights of the strong regional cups a sixth more; premier cups as much as a league game; select cups ×0.7; rec cups half; a cup nobody has tiered ×0.6 — and each flight below a tournament's top one counts a tenth less than the top. Which flight is a tournament's top one is read from the teams entered — within an age, the flight whose teams' league levels are strongest — not from its colour, since one cup's Gold is another's second flight. A trophy means a lot, and a national one most: a flight's champion earns a bonus on top of the games — 240 points for the top flight of a national cup, 150 for a regional cup's, 80 for a premier cup's, 40 for a select cup's, 20 for a rec cup's, and 20 for a cup nobody has tiered (10 for its bottom flights); each flight below the top earns a fifth less of that, down to a fifth — Surf Cup's Super Black 192, its Super White 144, its Black 96 — and the runner-up half. One trophy per event: the final where there is one, the table where there is not.",
+        detail: "A team's last 20 decided games within a year — across seasons, so last spring counts until newer games replace it. Each is a goal difference, capped at five, and a rating is the number that best explains them all against everyone else's at once: a hundred points is a goal, so a side rated 200 above another is expected to beat it by two. Recent games weigh more — a game's weight halves every 120 days — and so do close matchups, since a rout of a far weaker side says little. A game also counts by what it was played in. League games by the league: ECNL and Pre-ECNL a tenth more than a game at the ECNL RL / EA / GA level, RCL 1 and WPL Premier a tenth less, RCL 2 and Classic a fifth less, RCL 3, Copa and the Dev divisions three tenths less. Tournaments by the strength of the flight: the top flights of Surf Cup San Diego, Premier SuperCopa and Club América Cup a third more than a league game; the top flights of the strong regional cups a sixth more; premier cups as much as a league game; select cups ×0.7; rec cups half; a cup nobody has tiered ×0.6 — and each flight below a tournament's top one a tenth less than the top. Which flight is a tournament's top one is read from the teams entered — within an age, the flight whose teams' league levels are strongest — not from its colour, since one cup's Gold is another's second flight.",
     },
     {
         title: "Who it was against.",
-        detail: "Beating a higher-rated side pays more. Playing up counts on top, twice: a side a year older is expected to win by another hundred and fifty points' worth, so beating it pays more and losing to it costs less; and every game against an older side earns a credit whatever the result, because it is the strongest teams that choose to play up.",
+        detail: "Solved together, so a win over a side that beats everyone else is worth more than a win over one that does not. No age is assumed in a result — across this season's games between ages the older side won 49% — but playing up earns a credit on top, whatever the result: 9 points a game against a side a year older, 18 two years older, 30 at most, because it is the strongest teams that choose to play up.",
+    },
+    {
+        title: "Trophies.",
+        detail: "A flight's champion this season earns a bonus on top of the games: 60 points for the top flight of a national cup, 38 for a regional cup's, 20 for a premier cup's, 10 for a select cup's, 5 for a rec cup's, and 5 for a cup nobody has tiered (3 for its bottom flights); each flight below the top earns a fifth less of that, down to a fifth — Surf Cup's Super Black 48, its Super White 36, its Black 24 — and the runner-up half. One trophy per event: the final where there is one, the table where there is not.",
     },
     {
         title: "Enough games.",
@@ -267,5 +281,5 @@ export const RULE_STEPS = [
  * The rule in a breath — what the site and the app show, with a link to
  * this repository for the rest. RULE_STEPS is the long form.
  */
-export const RULE_SUMMARY = "Every team starts where its league puts it — ECNL at the top, then MLS Next, ECNL RL, EA and GA, RCL and WPL division by division — plus half of what it earned last season. Every decided game since May then moves both sides by how surprising the result was: tournament games count by the strength of the flight, a trophy adds a bonus by its tier, and playing up pays extra. One decided game to be ranked; Washington clubs’ teams are listed, whether the club lists them or a schedule did.";
+export const RULE_SUMMARY = "A rating is the goal difference that best explains a team's last 20 games within a year, solved against everyone's results at once — a hundred points is a goal. Recent games, close matchups and stronger competitions count more. Where a team plays anchors it — ECNL at the top, then MLS Next, ECNL RL, EA and GA, RCL and WPL division by division — and trophies and playing up add a little. One decided game to be ranked; Washington clubs’ teams are listed, whether the club lists them or a schedule did.";
 export const RULE_NOTE = "A cohort is a gender and the oldest birth year on the team, so a \u201cB13/14\u201d side ranks with the 2013s \u2014 U13 this season, the way the leagues label it. Washington clubs\u2019 teams are listed \u2014 the club\u2019s own and the ones a schedule printed under its name (owner, 2026-09-18) \u2014 but not a side with no club, and not an out-of-state club\u2019s; games against all of them still count.";

@@ -95,20 +95,19 @@ export declare function orderFlights(flights: {
 export declare function weightOf(kind: string, level: FlightLevel | null): number;
 export declare const TIER_LABELS: Record<Tier, string>;
 /**
- * A trophy means a lot — and a national one means most. Surf Cup San
+ * A trophy, on top of the games: a national one most. Surf Cup San
  * Diego's Best of the Best is the hardest flight a side here will play
- * all year, and its champion is, near enough, the best team in the
- * cohort: that title on its own is worth as much as most of a season
- * (owner, 2026-09-17: "this achievement itself should have almost enough
- * weight to put them on top"): 240. A regional cup's title 150, a
- * premier cup's 80 (Zipfizz), a select cup's 40 (Starfire's), a rec
- * cup's 20; the runner-up half of each.
+ * all year: 60. A regional cup's title 38, a premier cup's 20 (Zipfizz),
+ * a select cup's 10 (Starfire's), a rec cup's 5; the runner-up half of
+ * each. A quarter of what they were before 2.0 (owner, 2026-11-03): a
+ * rating is now in goals, the top of a cohort is a few tenths of a goal
+ * apart, and a 240-point title would outweigh a season of results.
  *
  * A tournament nobody has tiered is an unknown one, and pays as a rec
- * cup would — 20 for its top flights, 10 for its bottom ones — until
- * somebody places it. Once per team per event, after the replay,
- * the way the team page reads it (teams/honours.ts): the final where
- * there is one, the table where there is not — never both.
+ * cup would — 5 for its top flights, 3 for its bottom ones — until
+ * somebody places it. Once per team per event, the way the team page
+ * reads it (teams/honours.ts): the final where there is one, the table
+ * where there is not — never both.
  */
 export declare const CHAMPION_BONUS: Record<Tier, number>;
 /** What an untiered tournament's champion earns: its top flights, and its bottom ones. */

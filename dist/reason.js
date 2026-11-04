@@ -1,4 +1,3 @@
-import { CARRY } from "./rule.js";
 const cite = (r) => `${r.score} ${r.opponent} (${r.level})`;
 export function reasonFor(i) {
     const parts = [];
@@ -29,14 +28,9 @@ export function reasonPoints(i) {
         label: "Level",
         text: i.level === "select" ? "No tiered league this season" : i.league ? `${i.level} · ${i.league}` : i.level,
     });
-    // What last season left: half of where the team finished above or below its league prior (rule.ts CARRY).
-    if (i.carried && i.prior !== undefined) {
-        const finished = Math.round(i.prior + i.carried / CARRY);
-        out.push({
-            label: "Last season",
-            text: `${i.carried > 0 ? "+" : "−"}${Math.abs(Math.round(i.carried))} carried in — finished last season at ${finished}, half of the gap to the league prior (${Math.round(i.prior)}) comes along`,
-        });
-    }
+    // Rows rated before 2.0 carried part of last season into the prior; a rating now reads those games directly.
+    if (i.carried)
+        out.push({ label: "Last season", text: `${i.carried > 0 ? "+" : "−"}${Math.abs(Math.round(i.carried))} carried in` });
     out.push({
         label: "Record",
         text: `${i.won}-${i.drawn}-${i.lost} · ${i.gf}–${i.ga} in ${i.played} game${i.played === 1 ? "" : "s"}`,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { ageGapOf, ageGroupOf, bestLevel, cohortLabel, cohortOf, levelOf, MAX_CREDIT, PLAY_UP_CREDIT, replay, SELECT } from "./rule.js";
+import { ageGapOf, ageGroupOf, bestLevel, cohortLabel, cohortOf, levelOf, MAX_CREDIT, PLAY_UP_CREDIT, fit, SELECT } from "./rule.js";
 
 describe("levelOf", () => {
   it("reads the ladder from a league division", () => {
@@ -50,48 +50,56 @@ describe("levelOf", () => {
   });
 });
 
-describe("replay", () => {
-  it("weights a tournament less than a league and caps a rout", () => {
-    const prior = () => 1500;
-    const league = replay([{ homeTeamId: "a", awayTeamId: "b", homeScore: 5, awayScore: 0, kind: "league" }], prior);
-    const cup = replay([{ homeTeamId: "a", awayTeamId: "b", homeScore: 5, awayScore: 0, kind: "tournament" }], prior);
-    const rout = replay([{ homeTeamId: "a", awayTeamId: "b", homeScore: 11, awayScore: 0, kind: "league" }], prior);
-    expect(league.get("a")!.rating).toBeGreaterThan(cup.get("a")!.rating);
-    expect(rout.get("a")!.rating).toBeCloseTo(league.get("a")!.rating, 6);
-    expect(league.get("a")!.games).toBe(1);
+const AT = Date.parse("2026-11-01T00:00:00Z");
+const g = (home: string, away: string, hs: number, as: number, over: Record<string, unknown> = {}) =>
+  ({ homeTeamId: home, awayTeamId: away, homeScore: hs, awayScore: as, kind: "league", t: AT - 86_400_000, ...over });
+const flat = () => 1500;
+
+describe("fit", () => {
+  it("rates a side by the margin its results show, a hundred points a goal, pulled toward its anchor", () => {
+    // Four 2–0 wins over a side anchored at 1500, itself held there by its other games.
+    const games = [...Array.from({ length: 4 }, () => g("a", "b", 2, 0)), ...Array.from({ length: 20 }, (_, i) => g("b", `c${i}`, 0, 0))];
+    const r = fit(games, flat, AT);
+    expect(r.get("a")!.rating - r.get("b")!.rating).toBeGreaterThan(140);
+    expect(r.get("a")!.rating - r.get("b")!.rating).toBeLessThan(200);
+    expect(r.get("a")!.games).toBe(4);
   });
-  it("pays more for beating a higher-rated side", () => {
-    const strong = replay([{ homeTeamId: "a", awayTeamId: "b", homeScore: 1, awayScore: 0, kind: "league" }], (id) => (id === "b" ? 1700 : 1500));
-    const weak = replay([{ homeTeamId: "a", awayTeamId: "b", homeScore: 1, awayScore: 0, kind: "league" }], (id) => (id === "b" ? 1300 : 1500));
+  it("caps a rout at five goals", () => {
+    const five = fit([g("a", "b", 5, 0)], flat, AT), eleven = fit([g("a", "b", 11, 0)], flat, AT);
+    expect(eleven.get("a")!.rating).toBeCloseTo(five.get("a")!.rating, 6);
+  });
+  it("weighs a game by what it was played in, and an old game less", () => {
+    const league = fit([g("a", "b", 3, 0)], flat, AT), cup = fit([g("a", "b", 3, 0, { kind: "tournament" })], flat, AT);
+    expect(league.get("a")!.rating).toBeGreaterThan(cup.get("a")!.rating);
+    const old = fit([g("a", "b", 3, 0, { t: AT - 200 * 86_400_000 })], flat, AT);
+    expect(league.get("a")!.rating).toBeGreaterThan(old.get("a")!.rating);
+  });
+  it("reads a team's latest 20 games within a year, and nothing after the day it rates", () => {
+    const many = Array.from({ length: 30 }, (_, i) => g("a", `o${i}`, 1, 0, { t: AT - (30 - i) * 86_400_000 }));
+    expect(fit(many, flat, AT).get("a")!.games).toBe(20);
+    expect(fit([g("a", "b", 1, 0, { t: AT - 400 * 86_400_000 })], flat, AT).has("a")).toBe(false);
+    expect(fit([g("a", "b", 1, 0, { t: AT + 86_400_000 })], flat, AT).has("a")).toBe(false);
+  });
+  it("is worth more against a side that beats others", () => {
+    const strong = fit([g("a", "b", 1, 0), g("b", "c", 3, 0), g("b", "d", 3, 0)], flat, AT);
+    const weak = fit([g("a", "b", 1, 0), g("c", "b", 3, 0), g("d", "b", 3, 0)], flat, AT);
     expect(strong.get("a")!.rating).toBeGreaterThan(weak.get("a")!.rating);
   });
 });
 
 describe("playing up", () => {
-  const game = { homeTeamId: "young", awayTeamId: "old", homeScore: 0, awayScore: 1, kind: "league" };
-  const prior = () => 1500;
-  it("costs less to lose to an older side, and pays more to beat one", () => {
-    const flat = replay([game], prior);
-    const up = replay([game], prior, (id) => (id === "young" ? 2014 : 2013));
-    expect(up.get("young")!.rating).toBeGreaterThan(flat.get("young")!.rating);
-    const winFlat = replay([{ ...game, homeScore: 2, awayScore: 0 }], prior);
-    const winUp = replay([{ ...game, homeScore: 2, awayScore: 0 }], prior, (id) => (id === "young" ? 2014 : 2013));
-    expect(winUp.get("young")!.rating).toBeGreaterThan(winFlat.get("young")!.rating);
-  });
-  const draw = { homeTeamId: "young", awayTeamId: "old", homeScore: 1, awayScore: 1, kind: "league" };
-  it("credits the younger side for the game itself, and not the older one", () => {
-    const flat = replay([draw], prior);
-    const up = replay([draw], prior, (id) => (id === "young" ? 2014 : 2013));
-    expect(up.get("young")!.rating - flat.get("young")!.rating).toBeGreaterThan(10);
-    // The older side gains nothing from the credit; its change is the expectation's alone.
-    expect(up.get("old")!.rating + up.get("young")!.rating - 3000).toBeCloseTo(PLAY_UP_CREDIT, 6);
+  const years = (id: string) => (id === "young" ? 2014 : 2013);
+  it("assumes no age in the result, and credits the younger side for the game", () => {
+    const even = fit([g("young", "old", 1, 1)], flat, AT);
+    const up = fit([g("young", "old", 1, 1)], flat, AT, years);
+    expect(up.get("young")!.rating - even.get("young")!.rating).toBeCloseTo(PLAY_UP_CREDIT, 6);
+    expect(up.get("old")!.rating).toBeCloseTo(even.get("old")!.rating, 6);
   });
   it("stops the credit adding up past a few games, and reads a wide gap as a label error", () => {
-    const many = Array.from({ length: 10 }, () => draw);
-    const up = replay(many, prior, (id) => (id === "young" ? 2014 : 2013));
-    expect(up.get("old")!.rating + up.get("young")!.rating - 3000).toBeCloseTo(MAX_CREDIT, 6);
-    const wide = replay([draw], prior, (id) => (id === "young" ? 2016 : 2010));
-    const two = replay([draw], prior, (id) => (id === "young" ? 2015 : 2013));
+    const many = Array.from({ length: 10 }, () => g("young", "old", 1, 1));
+    expect(fit(many, flat, AT, years).get("young")!.rating - fit(many, flat, AT).get("young")!.rating).toBeCloseTo(MAX_CREDIT, 6);
+    const wide = fit([g("young", "old", 1, 1)], flat, AT, (id) => (id === "young" ? 2016 : 2010));
+    const two = fit([g("young", "old", 1, 1)], flat, AT, (id) => (id === "young" ? 2015 : 2013));
     expect(wide.get("young")!.rating).toBeCloseTo(two.get("young")!.rating, 6);
   });
   it("reads the gap from birth years, either way round", () => {
@@ -112,30 +120,9 @@ describe("cohorts", () => {
   });
 });
 
-describe("carriedPrior", () => {
-  it("keeps half of last season's gap, and nothing from a season too short to rank", async () => {
-    const { carriedPrior } = await import("./rule.js");
-    expect(carriedPrior(1680, { rating: 2240, games: 20 })).toBe(1960);
-    expect(carriedPrior(1680, { rating: 1480, games: 8 })).toBe(1580);
-    expect(carriedPrior(1680, { rating: 2240, games: 0 })).toBe(1680);
-    expect(carriedPrior(1680, undefined)).toBe(1680);
-  });
-});
-
-describe("the replay's margin and the league's weight", () => {
-  it("pays a blowout only as far as it surprised, and weighs a league game by its league", async () => {
-    const { replay, leagueWeightOf, levelOf, K } = await import("./rule.js");
-    const one = (home: number, away: number, score: [number, number], leagueWeight = 1) =>
-      replay([{ homeTeamId: "h", awayTeamId: "a", homeScore: score[0], awayScore: score[1], kind: "league", leagueWeight }], (id) => (id === "h" ? home : away)).get("h")!.rating - home;
-    // Equal sides: a 3–0 pays more than a 1–0, but less than √3 times.
-    expect(one(1600, 1600, [1, 0])).toBeCloseTo(K * 0.5, 6);
-    expect(one(1600, 1600, [3, 0])).toBeCloseTo(K * 0.5 * (1 + (Math.sqrt(3) - 1) * 0.5), 6);
-    // A heavy favourite's 7–1 is worth about its 1–0: the margin is capped at three and the surprise is small.
-    expect(one(1900, 1400, [7, 1]) / one(1900, 1400, [1, 0])).toBeLessThan(1.1);
-    // The underdog's 3–0 keeps the whole margin.
-    expect(one(1400, 1900, [3, 0]) / one(1400, 1900, [1, 0])).toBeGreaterThan(1.6);
-    // The league's weight scales the game.
-    expect(one(1600, 1600, [1, 0], 0.7)).toBeCloseTo(K * 0.5 * 0.7, 6);
+describe("the league's weight", () => {
+  it("weighs a league game by its league", async () => {
+    const { leagueWeightOf, levelOf } = await import("./rule.js");
     expect(leagueWeightOf(levelOf("ECNL League BU13 - ECNL"))).toBe(1.1);
     expect(leagueWeightOf(levelOf("RCL BU13 Div 1"))).toBe(0.9);
     expect(leagueWeightOf(levelOf("WPL 2026 Fall U11–U14 BU12 Copa 2 East"))).toBe(0.7);

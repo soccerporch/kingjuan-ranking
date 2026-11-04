@@ -36,7 +36,7 @@
 import { type FlightLevel } from "./tier.js";
 /** The home side's expected score, 0–1: the Elo expectation. */
 export declare function expected(home: number, away: number): number;
-export declare const RULE_VERSION = "2026-09-27";
+export declare const RULE_VERSION = "2026-11-03";
 /** Where the rule lives, for a page that explains it to say so: anyone can read it, run it on the season's games, and propose a change. */
 export declare const RULE_SOURCE = "https://github.com/soccerporch/kingjuan-ranking";
 export declare const K = 45;
@@ -105,6 +105,16 @@ export declare const TIER: {
     readonly five: 1490;
     readonly six: 1440;
 };
+/**
+ * ECNL and Pre-ECNL start this far above the ladder's top rung (owner,
+ * 2026-11-03): their sides play the strongest schedules, and a table that
+ * read the league name for less than that put an ECNL side with a losing
+ * record in the ECNL below a winning side of a lower league. Measured on
+ * the 2026-27 season so far, the results called right did not move; the
+ * forecast's confidence across leagues fell about 5%. RCL Division 1 at
+ * U10 and younger, the top of that pyramid, stays on the top rung.
+ */
+export declare const ECNL_PREMIUM = 120;
 export declare function levelOf(text: string, age?: number | null): Level | null;
 /**
  * What a league game is worth, by the league: a game in ECNL counts a

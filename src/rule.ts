@@ -41,7 +41,7 @@ export function expected(home: number, away: number): number {
   return 1 / (1 + 10 ** ((away - home) / 400));
 }
 
-export const RULE_VERSION = "2026-09-27";
+export const RULE_VERSION = "2026-11-03";
 /** Where the rule lives, for a page that explains it to say so: anyone can read it, run it on the season's games, and propose a change. */
 export const RULE_SOURCE = "https://github.com/soccerporch/kingjuan-ranking";
 export const K = 45;
@@ -105,13 +105,24 @@ export const SELECT: Level = { label: "select", prior: 1400 };
  */
 export const TIER = { one: 1800, two: 1740, three: 1660, four: 1560, five: 1490, six: 1440 } as const;
 
+/**
+ * ECNL and Pre-ECNL start this far above the ladder's top rung (owner,
+ * 2026-11-03): their sides play the strongest schedules, and a table that
+ * read the league name for less than that put an ECNL side with a losing
+ * record in the ECNL below a winning side of a lower league. Measured on
+ * the 2026-27 season so far, the results called right did not move; the
+ * forecast's confidence across leagues fell about 5%. RCL Division 1 at
+ * U10 and younger, the top of that pyramid, stays on the top rung.
+ */
+export const ECNL_PREMIUM = 120;
+
 export function levelOf(text: string, age: number | null = null): Level | null {
   const t = text.toLowerCase();
   const n = (re: RegExp) => { const m = t.match(re); return m ? Number(m[1]) : null; };
   const young = age !== null && age <= 12;
-  if (/pre-?ecnl/.test(t)) return /flight\s*ii/.test(t) ? { label: "Pre-ECNL Flight II", prior: 1770 } : { label: "Pre-ECNL", prior: TIER.one };
+  if (/pre-?ecnl/.test(t)) return /flight\s*ii/.test(t) ? { label: "Pre-ECNL Flight II", prior: 1770 + ECNL_PREMIUM } : { label: "Pre-ECNL", prior: TIER.one + ECNL_PREMIUM };
   if (/ecnl\s*(rl|regional)/.test(t)) return { label: "ECNL RL", prior: TIER.three };
-  if (/\becnl\b/.test(t)) return { label: "ECNL", prior: TIER.one };
+  if (/\becnl\b/.test(t)) return { label: "ECNL", prior: TIER.one + ECNL_PREMIUM };
   if (/aspire/.test(t)) return { label: "GA Aspire", prior: TIER.four };
   if (/girls academy|\bga\b|pre-?ga/.test(t)) return { label: "GA", prior: young ? TIER.two : TIER.three };
   if (/elite academy|\bea\b|pre-?ea/.test(t)) return { label: "EA", prior: young ? TIER.two : TIER.three };
@@ -246,7 +257,7 @@ export const RULE_STEPS: { title: string; detail: string }[] = [
   {
     title: "Where the team plays.",
     detail:
-      "The best league division it is entered in this season sets its starting point — only a league's top division carries the league's level: ECNL and Pre-ECNL; then MLS Next, and Elite Academy and Girls Academy at U11–U12; then ECNL RL, and EA and GA from U13 up; then RCL Division 1, GA Aspire and WPL Premier (and, for U8–U10, WPL Dev Div. 1); then on down division by division — RCL 2 with WPL Classic and Dev 2, RCL 3 with Dev 3. At U10 and younger, where no academy league exists, RCL Division 1 is the top of the pyramid and starts where ECNL does, and WPL Dev Div. 1 starts where Pre-MLS and EA do. A team in no league starts as select.",
+      "The best league division it is entered in this season sets its starting point — only a league's top division carries the league's level: ECNL and Pre-ECNL; then MLS Next, and Elite Academy and Girls Academy at U11–U12; then ECNL RL, and EA and GA from U13 up; then RCL Division 1, GA Aspire and WPL Premier (and, for U8–U10, WPL Dev Div. 1); then on down division by division — RCL 2 with WPL Classic and Dev 2, RCL 3 with Dev 3. ECNL and Pre-ECNL start a further 120 points above the next rung, because their sides play the strongest schedules. At U10 and younger, where no academy league exists, RCL Division 1 is the top of the pyramid and starts on the ladder's top rung, and WPL Dev Div. 1 starts where Pre-MLS and EA do. A team in no league starts as select.",
   },
   {
     title: "Last season.",

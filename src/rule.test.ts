@@ -6,7 +6,7 @@ describe("levelOf", () => {
   it("reads the ladder from a league division", () => {
     expect(levelOf("ECNL League - Northwest Conference BU13 - ECNL")?.label).toBe("ECNL");
     expect(levelOf("ECNL RL League - Northwest Conference BU13 - ECNL Regional League")?.label).toBe("ECNL RL");
-    expect(levelOf("Pre-ECNL League - Northwest Conference BU12 - Flight I")?.prior).toBe(1800);
+    expect(levelOf("Pre-ECNL League - Northwest Conference BU12 - Flight I")?.prior).toBe(1920);
     expect(levelOf("Elite Academy 2026 - PacNW U13 EA PACNW")?.label).toBe("EA");
     expect(levelOf("Girls Academy 2026 - PacNW GU14 Pacific-Northwest")?.label).toBe("GA");
     expect(levelOf("GA ASPIRE 2026 - PacNW GU14 Pacific Northwest")?.prior).toBe(1560);
